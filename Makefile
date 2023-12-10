@@ -1,6 +1,8 @@
 
 CSTD=c11
-all:
+all: rwp
+
+rwp:
 	gcc -o rwp main.c --std=$(CSTD) -lpthread
 
 clean:
