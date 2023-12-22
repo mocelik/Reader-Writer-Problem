@@ -21,8 +21,8 @@ int main(int argc, char **argv) {
     mtx_t reader_mutex;
     mtx_t writer_mutex;
     
-    mtx_init(&reader_mutex, mtx_plain);
-    mtx_init(&writer_mutex, mtx_plain);
+    mtx_init(&reader_mutex, mtx_timed);
+    mtx_init(&writer_mutex, mtx_timed);
 
     memset(reader_data, 0, sizeof(thread_data_t));
     memset(writer_data, 0, sizeof(thread_data_t));
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         reader_data[i].buffer_crc = &buffer_crc;
         reader_data[i].id = i;
         reader_data[i].exit_requested = false;
-        thrd_create(&reader_threads[i], reader_thread, &reader_data[i]);
+        thrd_create(&reader_threads[i], naive_reader_thread, &reader_data[i]);
     }
 
     for (int i=0; i < num_writers; i++) {
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
         writer_data[i].buffer_crc = &buffer_crc;
         writer_data[i].id = i;
         writer_data[i].exit_requested = false;
-        thrd_create(&writer_threads[i], writer_thread, &writer_data[i]);
+        thrd_create(&writer_threads[i], naive_writer_thread, &writer_data[i]);
     }
 
     // wait until user presses [enter] to exit
@@ -60,22 +60,37 @@ int main(int argc, char **argv) {
     for (int i=0; i < num_writers; i++)
         writer_data[i].exit_requested = true;
 
-    printf("\nExit requested. Waiting for %d reader(s) to exit... ", num_readers);
+    printf("\nExit requested.\nWaiting for %d reader(s) to exit... ", num_readers);
     fflush(stdout);
+    int total_reader_errors = 0;
     for (int i=0; i < num_readers; i++) {
-        thrd_join(reader_threads[i], NULL);
+        int exit_status = 0;
+        thrd_join(reader_threads[i], &exit_status);
+        total_reader_errors += exit_status;
     }
 
-    printf("Readers exited, waiting for %d writer(s) to exit... ", num_writers);
+    printf("Done.\nWaiting for %d writer(s) to exit... ", num_writers);
     fflush(stdout);
+    int total_writer_errors = 0;
     for (int i=0; i < num_writers; i++) {
-        thrd_join(writer_threads[i], NULL);
+        int exit_status = 0;
+        thrd_join(writer_threads[i], &exit_status);
+        total_writer_errors += exit_status;
     }
 
     mtx_destroy(&reader_mutex);
     mtx_destroy(&writer_mutex);
 
-    printf("Writers exited.\nDone.\n");
+    printf("Done.\n");
+    if (total_reader_errors != 0) {
+        printf("There were %d reader thread errors.\n", total_reader_errors);
+    }
+    if (total_writer_errors != 0) {
+        printf("There were %d writer thread errors.\n", total_writer_errors);
+    }
+    if (total_reader_errors == 0 && total_writer_errors == 0) {
+        printf("All threads exited successfully.\n");
+    }
 
     return 0;
 }
